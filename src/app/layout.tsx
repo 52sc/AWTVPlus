@@ -319,6 +319,87 @@ export default async function RootLayout({
             __html: `window.RUNTIME_CONFIG = ${JSON.stringify(runtimeConfig)};`,
           }}
         />
+{/* --- 开始插入：强制替换播放器 --- */}
+<script type="text/javascript"
+  dangerouslySetInnerHTML={{
+    __html: `
+      (function() {
+        // 监听路由变化，确保在播放页面生效
+        const checkAndReplace = () => {
+          // 仅在播放页面执行
+          if (window.location.pathname === '/play') {
+            // 等待页面 DOM 加载完成
+            if (document.readyState === 'complete') {
+              replacePlayer();
+            } else {
+              window.addEventListener('load', replacePlayer);
+            }
+          }
+        };
+
+        // 替换播放器的逻辑
+        const replacePlayer = () => {
+          // 1. 尝试获取当前页面的视频地址 (这里需要一点技巧)
+          // 因为 Next.js 是服务端渲染，直接获取变量很难，我们尝试从 URL 参数入手
+          const urlParams = new URLSearchParams(window.location.search);
+          let videoUrl = urlParams.get('url') || urlParams.get('play') || '';
+
+          // 如果 URL 没有，尝试从页面上隐藏的某个地方获取 (如果开发者把地址藏在 meta 标签里)
+          if (!videoUrl) {
+            const meta = document.querySelector('meta[property="og:video"]');
+            if (meta) videoUrl = meta.content;
+          }
+
+          if (!videoUrl) {
+            console.warn('未找到视频地址，无法加载播放器');
+            return;
+          }
+
+          // 2. 构造你的解析器地址
+          const playerUrl = 'https://video.aw15.com/?url=' + encodeURIComponent(videoUrl);
+
+          // 3. 找到页面上最大的那个容器 (通常是播放器的位置)
+          // 我们通过 CSS 类名或 ID 来猜测
+          const selectors = ['#player', '.player', '#artplayer', '.artplayer', 'main', '#root', 'body'];
+          let container = null;
+          for (let sel of selectors) {
+            container = document.querySelector(sel);
+            if (container) break;
+          }
+
+          // 4. 如果找到了容器，就清空它并塞入 iframe
+          if (container) {
+            // 清空原有内容
+            container.innerHTML = '';
+            
+            // 创建 iframe
+            const iframe = document.createElement('iframe');
+            iframe.src = playerUrl;
+            iframe.style.width = '100%';
+            iframe.style.height = '100vh'; // 全屏高度
+            iframe.style.border = 'none';
+            iframe.style.backgroundColor = '#000';
+            iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+            
+            container.appendChild(iframe);
+          }
+        };
+
+        // 页面加载时执行
+        checkAndReplace();
+        
+        // 监听 URL 变化 (如果是单页应用内部跳转)
+        const originalPushState = window.history.pushState;
+        window.history.pushState = function(...args) {
+          originalPushState.apply(window.history, args);
+          checkAndReplace();
+        };
+      })();
+    `
+  }} 
+/>
+{/* --- 插入结束 --- */}
+        
       </head>
       <body
         className={`${inter.className} min-h-screen bg-white text-gray-900 dark:bg-black dark:text-gray-200`}
